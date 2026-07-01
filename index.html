@@ -411,7 +411,12 @@
       const themeToggle = document.getElementById("themeToggle");
       const themeIcon = themeToggle?.querySelector(".theme-icon");
       const THEME_STORAGE_KEY = "priority-planner-theme";
-      const API_URL = "/api/tasks";
+      const API_URL = (() => {
+        if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+          return `${window.location.origin}/api/tasks`;
+        }
+        return "http://127.0.0.1:3000/api/tasks";
+      })();
 
       let tasks = [];
       initializeTheme();
@@ -443,12 +448,13 @@
       });
 
       function normalizeTask(task) {
+        const completed = task.completed === true || task.completed === "true" || task.completed === 1 || task.completed === "1";
         return {
           id: task.id,
           title: task.title || "",
           description: task.description || "",
           priority: task.priority || "Medium",
-          completed: Boolean(task.completed),
+          completed,
         };
       }
 
@@ -482,7 +488,7 @@
             row.innerHTML = `
               <td>
                 <div class="task-title-cell">
-                  <input class="checkbox" type="checkbox" ${task.completed ? "checked" : ""} data-id="${task.id}" />
+                  <input class="checkbox" type="checkbox" ${task.completed ? "checked" : ""} data-id="${task.id}" data-field="completed" />
                 </div>
               </td>
               <td>

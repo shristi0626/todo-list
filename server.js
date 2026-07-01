@@ -93,9 +93,7 @@ function writeTasks(tasks) {
     fs.mkdirSync(directory, { recursive: true });
   }
 
-  const tempPath = `${CSV_PATH}.tmp`;
-  fs.writeFileSync(tempPath, serializeCsv(tasks), "utf8");
-  fs.renameSync(tempPath, CSV_PATH);
+  fs.writeFileSync(CSV_PATH, serializeCsv(tasks), "utf8");
 }
 
 function respondJson(res, statusCode, data) {
