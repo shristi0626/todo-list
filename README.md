@@ -136,3 +136,10 @@ Then deploy as a web app and set:
 ```bash
 GOOGLE_APPS_SCRIPT_URL="https://script.google.com/macros/s/dev/..."
 ```
+
+You can also test the wrapper script directly:
+
+```bash
+node sync-to-google-sheets.js GET
+node sync-to-google-sheets.js POST '{"title":"Demo task","description":"Shared via Google Sheets","priority":"High","completed":false}'
+```
