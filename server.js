@@ -3,9 +3,9 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || "0.0.0.0";
 const ROOT_DIR = __dirname;
-const GOOGLE_APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL;
-const CSV_PATH = path.join(ROOT_DIR, "tasks.csv");
+const CSV_PATH = process.env.TASKS_FILE_PATH || path.join(ROOT_DIR, "tasks.csv");
 const CSV_HEADERS = ["id", "title", "description", "priority", "completed", "updatedAt"];
 
 function ensureCsvFile() {
@@ -88,7 +88,14 @@ function readTasks() {
 }
 
 function writeTasks(tasks) {
-  fs.writeFileSync(CSV_PATH, serializeCsv(tasks), "utf8");
+  const directory = path.dirname(CSV_PATH);
+  if (directory && !fs.existsSync(directory)) {
+    fs.mkdirSync(directory, { recursive: true });
+  }
+
+  const tempPath = `${CSV_PATH}.tmp`;
+  fs.writeFileSync(tempPath, serializeCsv(tasks), "utf8");
+  fs.renameSync(tempPath, CSV_PATH);
 }
 
 function respondJson(res, statusCode, data) {
@@ -151,39 +158,12 @@ function serveFile(res, filePath) {
   });
 }
 
-async function requestGoogleSheet(method, path, payload) {
-  if (!GOOGLE_APPS_SCRIPT_URL) {
-    return null;
-  }
-
-  const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(path ? { "x-task-path": path } : {}),
-    },
-    body: payload ? JSON.stringify(payload) : undefined,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Google Sheets sync failed with status ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data;
-}
-
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (url.pathname === "/api/tasks") {
     if (req.method === "GET") {
-      try {
-        const tasks = await requestGoogleSheet("GET", "", undefined);
-        respondJson(res, 200, tasks ?? readTasks());
-      } catch (error) {
-        respondJson(res, 200, readTasks());
-      }
+      respondJson(res, 200, readTasks());
       return;
     }
 
@@ -192,12 +172,6 @@ const server = http.createServer(async (req, res) => {
         const payload = await readBody(req);
         if (!payload.title || String(payload.title).trim() === "") {
           respondJson(res, 400, { error: "Title is required" });
-          return;
-        }
-
-        const tasks = await requestGoogleSheet("POST", "", payload);
-        if (tasks) {
-          respondJson(res, 201, tasks);
           return;
         }
 
@@ -219,12 +193,6 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "PUT") {
       try {
         const payload = await readBody(req);
-        const tasks = await requestGoogleSheet("PUT", id, payload);
-        if (tasks) {
-          respondJson(res, 200, tasks);
-          return;
-        }
-
         const localTasks = readTasks();
         const index = localTasks.findIndex((task) => task.id === id);
         if (index === -1) {
@@ -241,19 +209,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "DELETE") {
-      try {
-        const tasks = await requestGoogleSheet("DELETE", id, {});
-        if (tasks) {
-          respondJson(res, 200, tasks);
-          return;
-        }
-
-        const localTasks = readTasks().filter((task) => task.id !== id);
-        writeTasks(localTasks);
-        respondJson(res, 200, localTasks);
-      } catch (error) {
-        respondJson(res, 200, readTasks());
-      }
+      const localTasks = readTasks().filter((task) => task.id !== id);
+      writeTasks(localTasks);
+      respondJson(res, 200, localTasks);
       return;
     }
   }
@@ -269,9 +227,7 @@ const server = http.createServer(async (req, res) => {
   serveFile(res, path.join(ROOT_DIR, "index.html"));
 });
 
-server.listen(PORT, () => {
-  console.log(`Priority Planner server running at http://localhost:${PORT}`);
-  if (!GOOGLE_APPS_SCRIPT_URL) {
-    console.log("Set GOOGLE_APPS_SCRIPT_URL to use a Google Sheets-backed spreadsheet.");
-  }
+server.listen(PORT, HOST, () => {
+  console.log(`Priority Planner server running at http://${HOST}:${PORT}`);
+  console.log(`Shared task data is stored in ${CSV_PATH}`);
 });
