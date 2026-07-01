@@ -401,7 +401,6 @@
     </main>
 
     <script>
-      const STORAGE_KEY = "priority-planner-tasks";
       const form = document.getElementById("taskForm");
       const titleInput = document.getElementById("taskTitle");
       const descriptionInput = document.getElementById("taskDescription");
@@ -412,9 +411,11 @@
       const themeToggle = document.getElementById("themeToggle");
       const themeIcon = themeToggle?.querySelector(".theme-icon");
       const THEME_STORAGE_KEY = "priority-planner-theme";
+      const API_URL = "/api/tasks";
 
-      let tasks = loadTasks();
+      let tasks = [];
       initializeTheme();
+      loadTasks();
 
       function initializeTheme() {
         const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
@@ -441,17 +442,28 @@
         applyTheme(nextTheme);
       });
 
-      function loadTasks() {
-        try {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          return stored ? JSON.parse(stored) : [];
-        } catch {
-          return [];
-        }
+      function normalizeTask(task) {
+        return {
+          id: task.id,
+          title: task.title || "",
+          description: task.description || "",
+          priority: task.priority || "Medium",
+          completed: Boolean(task.completed),
+        };
       }
 
-      function saveTasks() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      async function loadTasks() {
+        try {
+          const response = await fetch(API_URL);
+          if (!response.ok) throw new Error("Unable to load tasks");
+          const data = await response.json();
+          tasks = Array.isArray(data) ? data.map(normalizeTask) : [];
+          renderTasks();
+        } catch (error) {
+          console.error(error);
+          tasks = [];
+          renderTasks();
+        }
       }
 
       function renderTasks() {
@@ -515,7 +527,11 @@
           .replace(/'/g, "&#39;");
       }
 
-      form.addEventListener("submit", (event) => {
+      async function refreshTasks() {
+        await loadTasks();
+      }
+
+      form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const title = titleInput.value.trim();
         const description = descriptionInput.value.trim();
@@ -523,22 +539,25 @@
 
         if (!title) return;
 
-        tasks.unshift({
-          id: crypto.randomUUID(),
-          title,
-          description,
-          priority,
-          completed: false,
-        });
+        try {
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, description, priority, completed: false }),
+          });
 
-        saveTasks();
-        renderTasks();
+          if (!response.ok) throw new Error("Could not save task");
+          await refreshTasks();
+        } catch (error) {
+          console.error(error);
+        }
+
         form.reset();
         priorityInput.value = "Medium";
         titleInput.focus();
       });
 
-      taskTableBody.addEventListener("change", (event) => {
+      taskTableBody.addEventListener("change", async (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
 
@@ -547,24 +566,42 @@
 
         if (!id || !field) return;
 
-        tasks = tasks.map((task) => (task.id === id ? { ...task, [field]: field === "completed" ? target.checked : target.value } : task));
-        saveTasks();
-        renderTasks();
+        const currentTask = tasks.find((task) => task.id === id);
+        if (!currentTask) return;
+
+        try {
+          const payload = {
+            ...currentTask,
+            [field]: field === "completed" ? target.checked : target.value,
+          };
+          const response = await fetch(`${API_URL}/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) throw new Error("Could not update task");
+          await refreshTasks();
+        } catch (error) {
+          console.error(error);
+        }
       });
 
-      taskTableBody.addEventListener("click", (event) => {
+      taskTableBody.addEventListener("click", async (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
 
         if (target.classList.contains("delete-btn")) {
           const id = target.dataset.id;
-          tasks = tasks.filter((task) => task.id !== id);
-          saveTasks();
-          renderTasks();
+          try {
+            const response = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+            if (!response.ok) throw new Error("Could not delete task");
+            await refreshTasks();
+          } catch (error) {
+            console.error(error);
+          }
         }
       });
-
-      renderTasks();
     </script>
   </body>
 </html>
