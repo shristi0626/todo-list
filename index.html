@@ -310,6 +310,37 @@
         box-shadow: none;
       }
 
+      .priority-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .priority-pill.low {
+        background: #dbeafe;
+        color: #1d4ed8;
+      }
+
+      .priority-pill.medium {
+        background: #d1fae5;
+        color: #0f766e;
+      }
+
+      .priority-pill.high {
+        background: #ffedd5;
+        color: #b45309;
+      }
+
+      .priority-pill.urgent {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+
       .delete-btn {
         background: transparent;
         color: var(--danger);
@@ -487,6 +518,9 @@
                   <option value="Medium" ${task.priority === "Medium" ? "selected" : ""}>Medium</option>
                   <option value="Low" ${task.priority === "Low" ? "selected" : ""}>Low</option>
                 </select>
+                <div style="margin-top: 10px;">
+                  <span class="priority-pill ${task.priority ? task.priority.toLowerCase() : "medium"}">${task.priority || "Medium"}</span>
+                </div>
               </td>
               <td>
                 <button class="delete-btn" type="button" data-id="${task.id}">Remove</button>
